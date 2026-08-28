@@ -1,0 +1,14 @@
+{
+  "name": "personal-whoop-analyst",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "whoop:authorize": "node scripts/whoop.mjs authorize",
+    "whoop:callback": "node scripts/whoop.mjs callback",
+    "whoop:sync": "node scripts/whoop.mjs sync",
+    "whoop:status": "node scripts/whoop.mjs status"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
