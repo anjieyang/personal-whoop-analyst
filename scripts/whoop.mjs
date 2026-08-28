@@ -241,6 +241,67 @@ async function sync() {
   })}\n`);
 }
 
+async function exportAll() {
+  const destinationArg = process.argv[3];
+  if (!destinationArg) {
+    throw new Error("Usage: whoop.mjs export-all <destination-directory>");
+  }
+
+  const destination = resolve(PROJECT_ROOT, destinationArg);
+  if (!destination.startsWith(`${PROJECT_ROOT}/`)) {
+    throw new Error("Export destination must be inside the project directory");
+  }
+
+  const accessToken = await refreshAccessToken();
+  const exportedAt = new Date().toISOString();
+  const [recoveries, cycles, sleeps, workouts, bodyMeasurement] = await Promise.all([
+    fetchCollection("/developer/v2/recovery", accessToken),
+    fetchCollection("/developer/v2/cycle", accessToken),
+    fetchCollection("/developer/v2/activity/sleep", accessToken),
+    fetchCollection("/developer/v2/activity/workout", accessToken),
+    apiGet("/developer/v2/user/measurement/body", accessToken),
+  ]);
+
+  const manifest = {
+    exported_at: exportedAt,
+    source: "WHOOP Developer API v2",
+    export_scope: "All records returned by the authorized public API endpoints",
+    authorized_scopes: SCOPES.filter((scope) => scope !== "offline"),
+    excluded: [
+      "OAuth credentials and tokens",
+      "WHOOP product data not exposed by the public Developer API",
+    ],
+    files: {
+      "recovery.json": recoveries.length,
+      "cycles.json": cycles.length,
+      "sleep.json": sleeps.length,
+      "workouts.json": workouts.length,
+      "body_measurement.json": 1,
+    },
+  };
+
+  await Promise.all([
+    writePrivateJson(resolve(destination, "manifest.json"), manifest),
+    writePrivateJson(resolve(destination, "recovery.json"), recoveries),
+    writePrivateJson(resolve(destination, "cycles.json"), cycles),
+    writePrivateJson(resolve(destination, "sleep.json"), sleeps),
+    writePrivateJson(resolve(destination, "workouts.json"), workouts),
+    writePrivateJson(resolve(destination, "body_measurement.json"), bodyMeasurement),
+  ]);
+
+  process.stdout.write(`${JSON.stringify({
+    ok: true,
+    destination,
+    counts: {
+      recoveries: recoveries.length,
+      cycles: cycles.length,
+      sleeps: sleeps.length,
+      workouts: workouts.length,
+      body_measurements: 1,
+    },
+  })}\n`);
+}
+
 async function status() {
   const latestPath = resolve(DATA_DIR, "latest.json");
   let latest = null;
@@ -262,9 +323,10 @@ const command = process.argv[2];
 try {
   if (command === "authorize") authorize();
   else if (command === "callback") await callback();
+  else if (command === "export-all") await exportAll();
   else if (command === "sync") await sync();
   else if (command === "status") await status();
-  else throw new Error("Usage: whoop.mjs <authorize|callback|sync|status> [days]");
+  else throw new Error("Usage: whoop.mjs <authorize|callback|export-all|sync|status> [argument]");
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
